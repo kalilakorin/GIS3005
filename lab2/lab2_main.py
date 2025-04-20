@@ -1,6 +1,20 @@
+import os
+from turtle import config_dict
+
 import arcpy
 import re
+import yaml
 import arcgisscripting
+from etl.GSheetsEtl import GSheetsEtl
+
+def etl():
+    """
+    Start the ETL process which gets the addresses to opt out
+    :return: null
+    """
+    print("Start ETL process...")
+    etl_instance = GSheetsEtl(config_dict)
+    etl_instance.process()
 
 def setup():
     """
@@ -9,12 +23,15 @@ def setup():
     """
 
     print("Setting up workspace")
+    with open('config/wnvoutbreak.yaml') as f:
+        config_dict = yaml.load(f, Loader=yaml.FullLoader)
     print("CAUTION: all layers that are generated in this script may be overwritten or removed.")
-    # Geodatabase location
-    arcpy.env.workspace = r"D:\jilli\Documents\ACC-RRCC\Spring_2025\GIS3005_GIS_Apps\labs\lab1\WestNileOutbreak\WestNileOutbreak.gdb"
+    # Geodatabase workplace location
+    arcpy.env.workspace = f"{config_dict.get('arcpy_workspace')}"
     # allow for overwriting
-    arcpy.env.overwriteOutput = True
+    arcpy.env.overwriteOutput = f"{config_dict.get('arcpy_overwrite')}"
     print("Setup complete")
+    return config_dict
 
 
 def buffer(layer_name: str):
@@ -46,8 +63,10 @@ def buffer(layer_name: str):
     # perform the buffer analysis
     print(f"Buffering '{layer_name}' to generate '{output_buffer_layer_name}' at {buff_dist}")
     print("Please wait...")
-    arcpy.analysis.Buffer(in_features=layer_name,
-                          out_feature_class=output_buffer_layer_name,
+    in_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
+    out_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", output_buffer_layer_name)
+    arcpy.analysis.Buffer(in_features=in_features,
+                          out_feature_class=out_features,
                           buffer_distance_or_field=buff_dist,
                           line_side="FULL",
                           line_end_type="ROUND",
@@ -74,8 +93,15 @@ def intersect(buffer_list: list[str]):
     # perform the intersect analysis
     print(f"Using {buffer_list} to create '{intersect_layer}'")
     print("Please wait...")
-    arcpy.analysis.Intersect(in_features=buffer_list,
-                             out_feature_class=intersect_layer)
+
+    in_features = []
+    for feature in buffer_list:
+        in_features.append(os.path.join(config_dict.get('arcpy_gdb'), feature))
+
+    out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", intersect_layer)
+
+    arcpy.analysis.Intersect(in_features=in_features,
+                             out_feature_class=out_feature)
     print(f"Intersect '{intersect_layer}' complete")
     return intersect_layer
 
@@ -97,12 +123,72 @@ def spatial_join(target_layer: str, join_layer: str):
     # perform the spatial analysis
     print(f"Creating '{spatial_join_layer}' between '{target_layer}' and '{join_layer}'")
     print("Please wait...")
-    arcpy.analysis.SpatialJoin(target_features=target_layer,
-                               join_features=join_layer,
-                               out_feature_class=spatial_join_layer)
+
+    target_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", target_layer)
+    join_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", join_layer)
+    out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", spatial_join_layer)
+
+    arcpy.analysis.SpatialJoin(target_features=target_feature,
+                               join_features=join_feature,
+                               out_feature_class=out_feature)
     print(f"Spatial join '{spatial_join_layer}' complete")
 
     return spatial_join_layer
+
+
+def erase(in_layer: str, erase_layer: str):
+    """
+    Uses the addresses created from the ETL file, and erases those addresses from the concerned mosquito areas
+    :param in_layer: layer name for the mosquito areas of concern - layer which has all addresses
+    :param erase_layer: layer name from ETL file which has the addresses to avoid - it will be erased from in_layer
+    :return: output_layer: name of the generated layer - it will contain the addresses which can be sprayed
+    """
+
+    print(f"Starting the erase analysis")
+
+    # create a buffered area of where to avoid spraying
+    areas_to_avoid = buffer(erase_layer)
+    print()
+
+    print(f"Erasing '{erase_layer}' points from '{in_layer}' - Create a name for the new layer that will be created.")
+    output_layer = get_valid_layer_name(default_layer_name="areas_to_spray")
+    # check if the layer exists, delete it if it does
+    delete_existing_layer(output_layer)
+
+    # perform the erase of features
+    print(f"Erasing areas to avoid spraying. Creating '{output_layer}'.")
+    print("Please wait...")
+
+    in_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", in_layer)
+    erase_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", areas_to_avoid)
+    out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", output_layer)
+
+    arcpy.analysis.Erase(in_features=in_features,
+                         erase_features=erase_features,
+                         out_feature_class=out_feature)
+    print(f"Erase layer '{output_layer}' complete.")
+
+    return areas_to_avoid
+
+
+def spatial_selection(intersect_layer: str, select_layer: str):
+    """
+    Does a quick check for how many features are found within a layer
+    :param intersect_layer: the boulder address layer name
+    :param select_layer: areas to avoid buffer layer name
+    :return: the number from the select by location - the number of addresses that fall within the buffer layer, which
+        are the number of addresses that should not be sprayed
+    """
+
+    in_layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", intersect_layer)
+    select_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", select_layer)
+
+    address_to_inform = arcpy.management.SelectLayerByLocation(in_layer=in_layer,
+                                                               overlap_type="WITHIN",
+                                                               select_features=select_features,
+                                                               selection_type="NEW_SELECTION")
+    count = int(arcpy.GetCount_management(address_to_inform)[0])
+    return count
 
 
 def add_layer_to_project(layer_name: str):
@@ -115,7 +201,7 @@ def add_layer_to_project(layer_name: str):
     print(f"Adding {layer_name} to project.")
     print("Please wait...")
     try:
-        proj_path = r"D:\jilli\Documents\ACC-RRCC\Spring_2025\GIS3005_GIS_Apps\labs\lab1\WestNileOutbreak"
+        proj_path = f"{config_dict.get('arcpy_workspace')}"
         aprx = arcpy.mp.ArcGISProject(rf"{proj_path}\WestNileOutbreak.aprx")
 
         # get the list of maps in the project, and select the 1st one
@@ -144,7 +230,10 @@ def query_by_attribute(layer_name: str, query: str, selection: str="NEW_SELECTIO
     """
 
     print(f"Querying '{layer_name}' with query '{query}' as '{selection}'")
-    query_result = arcpy.management.SelectLayerByAttribute(in_layer_or_view=layer_name,
+
+    in_layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
+
+    query_result = arcpy.management.SelectLayerByAttribute(in_layer_or_view=in_layer,
                                                            selection_type=selection,
                                                            where_clause=query)
     count_result = arcpy.management.GetCount(query_result)
@@ -158,10 +247,11 @@ def delete_existing_layer(layer_name: str):
     :return: null
     """
 
+    layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
     # check if the layer exists, delete it if it does
-    if arcpy.Exists(layer_name):
+    if arcpy.Exists(layer):
         print(f"'{layer_name}' already exists - deleting existing layer")
-        arcpy.Delete_management(layer_name)
+        arcpy.Delete_management(layer)
     else:
         print(f"'{layer_name}' does not exist yet")
 
@@ -204,8 +294,8 @@ def get_units_for_buffer():
     """
 
     # Define a list of acceptable units
-    valid_units = ["Feet", "Yards", "Miles", "Meters", "Kilometers"]
-    default_unit = "Feet"
+    valid_units = config_dict.get('valid_units')
+    default_unit = config_dict.get('default_unit')
 
     # Print the list of units to the user for unit selection
     print("Select a unit for buffering:")
@@ -301,8 +391,9 @@ def ask_to_continue(prompt: str="Would you like to continue?"):
     :param prompt: question to user
     :return choice: "Yes" or "No"
     """
+
     # Define a list of acceptable answers
-    valid_answers = ["Yes", "No"]
+    valid_answers = config_dict.get('valid_answers_y_n')
 
     print(f"{prompt}")
     for i, answer in enumerate(valid_answers, 1):
@@ -326,10 +417,12 @@ def ask_to_continue(prompt: str="Would you like to continue?"):
             print("Invalid input. Please enter a valid number.")
 
 
-
 def main():
+    global config_dict
+
     try:
-        setup()
+        config_dict = setup()
+        print(config_dict)
         print()
 
         # layers that exist in gdb which will be buffered
@@ -365,6 +458,20 @@ def main():
             add_layer_to_project(spatial_layer)
         else:
             print(f"Will not add '{spatial_layer}' to the map")
+        print()
+
+        # run the etc process for which addresses to avoid based on Google opt-out form
+        etl()
+        print()
+
+        # erase the areas to avoid, which will create a new layer to use
+        avoid_points_layer = "avoid_points"
+        areas_to_avoid = erase(spatial_layer, avoid_points_layer)
+        print()
+
+        # inform the user the number of addresses that will not be sprayed
+        address_count = spatial_selection(spatial_join_target, areas_to_avoid)
+        print(f"There are {address_count} addresses that will not get treatment and must be notified.")
         print()
 
         # Notify the end of the program
