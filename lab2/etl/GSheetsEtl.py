@@ -65,7 +65,7 @@ class GSheetsEtl(SpatialEtl):
 
         # set the local variables
         in_table = f"{self.config_dict.get('proj_dir')}new_addresses.csv"
-        out_feature_class = "avoid_points"
+        out_feature_class = self.config_dict.get('avoid_points')
         x_coords = "X"
         y_coords = "Y"
 

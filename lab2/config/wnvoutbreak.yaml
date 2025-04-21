@@ -11,3 +11,4 @@ arcpy_overwrite: "True"
 valid_units: ["Feet", "Yards", "Miles", "Meters", "Kilometers"]
 default_unit: "Feet"
 valid_answers_y_n: ["Yes", "No"]
+avoid_points: "avoid_points"

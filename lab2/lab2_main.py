@@ -75,7 +75,7 @@ def buffer(layer_name: str):
     return output_buffer_layer_name
 
 
-def intersect(buffer_list: list[str]):
+def intersect(buffer_list: list[str], default_layer_name: str="intersect_layer"):
     """
     Uses the intersect analysis on the incoming layers
     :param buffer_list: a list of layer names that will be used for the intersect
@@ -85,7 +85,7 @@ def intersect(buffer_list: list[str]):
     print(f"Starting the intersect analysis")
 
     # get buffer name from user
-    intersect_layer = get_valid_layer_name(default_layer_name="intersect_layer")
+    intersect_layer = get_valid_layer_name(default_layer_name)
 
     # check if the layer exists, delete it if it does
     delete_existing_layer(intersect_layer)
@@ -106,7 +106,7 @@ def intersect(buffer_list: list[str]):
     return intersect_layer
 
 
-def spatial_join(target_layer: str, join_layer: str):
+def spatial_join(target_layer: str, join_layer: str, default_layer_name: str="spatial_join_layer"):
     """
     Uses the spatial join analysis for incoming target and join layer
     :param target_layer: the addresses to be used
@@ -115,7 +115,7 @@ def spatial_join(target_layer: str, join_layer: str):
     """
 
     print(f"Starting the spatial join analysis")
-    spatial_join_layer = get_valid_layer_name(default_layer_name="spatial_join_layer")
+    spatial_join_layer = get_valid_layer_name(default_layer_name)
 
     # check if the layer exists, delete it if it does
     delete_existing_layer(spatial_join_layer)
@@ -130,13 +130,16 @@ def spatial_join(target_layer: str, join_layer: str):
 
     arcpy.analysis.SpatialJoin(target_features=target_feature,
                                join_features=join_feature,
-                               out_feature_class=out_feature)
+                               out_feature_class=out_feature,
+                               join_operation="JOIN_ONE_TO_ONE",
+                               join_type="KEEP_COMMON",
+                               match_option="WITHIN")
     print(f"Spatial join '{spatial_join_layer}' complete")
 
     return spatial_join_layer
 
 
-def erase(in_layer: str, erase_layer: str):
+def erase(in_layer: str, erase_layer: str, default_layer_name: str="erased_layer"):
     """
     Uses the addresses created from the ETL file, and erases those addresses from the concerned mosquito areas
     :param in_layer: layer name for the mosquito areas of concern - layer which has all addresses
@@ -146,12 +149,8 @@ def erase(in_layer: str, erase_layer: str):
 
     print(f"Starting the erase analysis")
 
-    # create a buffered area of where to avoid spraying
-    areas_to_avoid = buffer(erase_layer)
-    print()
-
     print(f"Erasing '{erase_layer}' points from '{in_layer}' - Create a name for the new layer that will be created.")
-    output_layer = get_valid_layer_name(default_layer_name="areas_to_spray")
+    output_layer = get_valid_layer_name(default_layer_name)
     # check if the layer exists, delete it if it does
     delete_existing_layer(output_layer)
 
@@ -160,7 +159,7 @@ def erase(in_layer: str, erase_layer: str):
     print("Please wait...")
 
     in_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", in_layer)
-    erase_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", areas_to_avoid)
+    erase_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", erase_layer)
     out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", output_layer)
 
     arcpy.analysis.Erase(in_features=in_features,
@@ -168,7 +167,7 @@ def erase(in_layer: str, erase_layer: str):
                          out_feature_class=out_feature)
     print(f"Erase layer '{output_layer}' complete.")
 
-    return areas_to_avoid
+    return output_layer
 
 
 def spatial_selection(intersect_layer: str, select_layer: str):
@@ -443,7 +442,7 @@ def main():
 
         # do a spatial join with the addresses that overlap the intersect layer
         spatial_join_target = "Boulder_Addresses"
-        spatial_layer = spatial_join(spatial_join_target, intersect_layer)
+        spatial_layer = spatial_join(spatial_join_target, intersect_layer, default_layer_name="address_in_concern_areas")
         print()
 
         # inform the user the number of address that were found
@@ -465,13 +464,18 @@ def main():
         print()
 
         # erase the areas to avoid, which will create a new layer to use
-        avoid_points_layer = "avoid_points"
-        areas_to_avoid = erase(spatial_layer, avoid_points_layer)
+        avoid_points_layer = config_dict.get('avoid_points')
+        # create a buffered area of where to avoid spraying
+        areas_to_avoid = buffer(avoid_points_layer)
+        print()
+
+        address_to_spray = erase(spatial_layer, areas_to_avoid, default_layer_name="addresses_to_spray")
         print()
 
         # inform the user the number of addresses that will not be sprayed
-        address_count = spatial_selection(spatial_join_target, areas_to_avoid)
-        print(f"There are {address_count} addresses that will not get treatment and must be notified.")
+        address_count = spatial_selection(spatial_join_target, address_to_spray)
+        # addresses to notify
+        print(f"There are {address_count} addresses that will need treatment and must be notified.")
         print()
 
         # Notify the end of the program
