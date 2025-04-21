@@ -26,17 +26,23 @@ def setup():
     """
 
     print("Setting up workspace")
+    logging.debug("Setting up workspace")
+
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
     logging.basicConfig(level=logging.DEBUG,
                         filename=f"{config_dict.get('log_dir')}wnv.log",
                         filemode="w",)
+
+    print("CAUTION: all layers that are generated in this script may be overwritten or removed.")
     logging.warning("CAUTION: all layers that are generated in this script may be overwritten or removed.")
+
     # Geodatabase workplace location
     arcpy.env.workspace = f"{config_dict.get('arcpy_workspace')}"
     # allow for overwriting
     arcpy.env.overwriteOutput = f"{config_dict.get('arcpy_overwrite')}"
+
     logging.debug("Setup complete")
     return config_dict
 
@@ -49,7 +55,7 @@ def buffer(layer_name: str):
     :return output_buffer_layer_name: the layer name that was created for the buffer analysis
     """
 
-    logging.debug("Entered buffer method")
+    logging.debug("Starting buffer")
     # create buffer layer name
     output_buffer_layer_name = f"buff_{layer_name}"
 
@@ -70,14 +76,21 @@ def buffer(layer_name: str):
 
     # perform the buffer analysis
     logging.info(f"Buffering '{layer_name}' to generate '{output_buffer_layer_name}' at {buff_dist}")
+
+    # set up the project layer path
     in_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
+    logging.debug(f"Buffer in_features: {in_features}")
     out_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", output_buffer_layer_name)
+    logging.debug(f"Buffer out_features: {out_features}")
+
+    # call buffer analysis
     arcpy.analysis.Buffer(in_features=in_features,
                           out_feature_class=out_features,
                           buffer_distance_or_field=buff_dist,
                           line_side="FULL",
                           line_end_type="ROUND",
                           dissolve_option="ALL")
+
     logging.info(f"Buffer '{output_buffer_layer_name}' complete")
     return output_buffer_layer_name
 
@@ -100,14 +113,20 @@ def intersect(buffer_list: list[str], default_layer_name: str="intersect_layer")
     # perform the intersect analysis
     logging.info(f"Using {buffer_list} to create '{intersect_layer}'")
 
+    # set up the workspace layers full path names
     in_features = []
     for feature in buffer_list:
         in_features.append(os.path.join(config_dict.get('arcpy_gdb'), feature))
+    logging.debug(f"Intersect in_features names: {in_features}")
 
+    # set up the workspace output layer name
     out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", intersect_layer)
+    logging.debug(f"Intersect out_feature: {out_feature}")
 
+    # call the intersect analysis
     arcpy.analysis.Intersect(in_features=in_features,
                              out_feature_class=out_feature)
+
     logging.info(f"Intersect '{intersect_layer}' complete")
     return intersect_layer
 
@@ -130,17 +149,21 @@ def spatial_join(target_layer: str, join_layer: str, default_layer_name: str="sp
     logging.info(f"Creating '{spatial_join_layer}' between '{target_layer}' and '{join_layer}'")
 
     target_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", target_layer)
+    logging.debug(f"spatial join target_feature: {target_feature}")
     join_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", join_layer)
+    logging.debug(f"spatial join join_feature: {join_feature}")
     out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", spatial_join_layer)
+    logging.debug(f"spatial join out_feature: {out_feature}")
 
+    # cal the spatial join analysis
     arcpy.analysis.SpatialJoin(target_features=target_feature,
                                join_features=join_feature,
                                out_feature_class=out_feature,
                                join_operation="JOIN_ONE_TO_ONE",
                                join_type="KEEP_COMMON",
                                match_option="WITHIN")
-    logging.info(f"Spatial join '{spatial_join_layer}' complete")
 
+    logging.info(f"Spatial join '{spatial_join_layer}' complete")
     return spatial_join_layer
 
 
@@ -152,25 +175,32 @@ def erase(in_layer: str, erase_layer: str, default_layer_name: str="erased_layer
     :return: output_layer: name of the generated layer - it will contain the addresses which can be sprayed
     """
 
-    logging.info(f"Starting the erase analysis")
+    logging.debug(f"Starting the erase analysis")
 
-    logging.info(f"Erasing '{erase_layer}' points from '{in_layer}' - Create a name for the new layer that will be created.")
+    # get a name from the user for the new layer that will have the addresses removed from it
+    print(f"Erasing '{erase_layer}' points from '{in_layer}' - Create a name for the new layer that will be created.")
     output_layer = get_valid_layer_name(default_layer_name)
+
     # check if the layer exists, delete it if it does
     delete_existing_layer(output_layer)
 
     # perform the erase of features
     logging.info(f"Erasing areas to avoid spraying. Creating '{output_layer}'.")
 
+    # set up the layers full path
     in_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", in_layer)
+    logging.debug(f"erase in_features: {in_features}")
     erase_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", erase_layer)
+    logging.debug(f"erase erase_features: {erase_features}")
     out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", output_layer)
+    logging.debug(f"erase out_feature: {out_feature}")
 
+    # call the erase analysis
     arcpy.analysis.Erase(in_features=in_features,
                          erase_features=erase_features,
                          out_feature_class=out_feature)
-    logging.info(f"Erase layer '{output_layer}' complete.")
 
+    logging.info(f"Erase layer '{output_layer}' complete.")
     return output_layer
 
 
@@ -184,21 +214,35 @@ def spatial_selection(intersect_layer: str, select_layer: str):
     """
 
     logging.debug("Entered spatial_selection")
-    in_layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", intersect_layer)
-    select_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", select_layer)
 
+    in_layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", intersect_layer)
+    logging.debug(f"spatial selection in_layer: {in_layer}")
+    select_features = os.path.join(f"{config_dict.get('arcpy_gdb')}", select_layer)
+    logging.debug(f"spatial selection select_features: {select_features}")
+
+    # call the select layer by location
     address_to_inform = arcpy.management.SelectLayerByLocation(in_layer=in_layer,
                                                                overlap_type="WITHIN",
                                                                select_features=select_features,
                                                                selection_type="NEW_SELECTION")
+    # get the count from the selected items
     count = int(arcpy.GetCount_management(address_to_inform)[0])
+    logging.debug(f"spatial selection number: {count}")
     logging.debug("Exiting spatial_selection")
     return count
 
 
 def export_map():
+    """
+    Exports the layout from the project to a pdf
+    Updates the title with a subtitle
+    Updates the date that will be on the layout
+    :return: null
+    """
 
     logging.debug("Entering export_map")
+
+    # get the project path and layout
     proj_path = f"{config_dict.get('arcpy_workspace')}"
     aprx = arcpy.mp.ArcGISProject(rf"{proj_path}\WestNileOutbreak.aprx")
     layout = aprx.listLayouts()[0]
@@ -220,11 +264,14 @@ def export_map():
             element.text = element.text + "\n" + today_str
             print("Updated date")
 
-    # export the map
+    # set up the name file path and name
     map_pdf = f"{config_dict.get('proj_dir')}map_layout.pdf"
+
+    # export the map
     layout.exportToPDF(out_pdf=map_pdf)
+
     print(f"Map exported: {map_pdf}")
-    logging.info(f"Map exported: '{map_pdf}'")
+    logging.info(f"Map exported: {map_pdf}")
     logging.debug("Exiting export_map")
 
 
@@ -268,12 +315,18 @@ def query_by_attribute(layer_name: str, query: str, selection: str="NEW_SELECTIO
 
     logging.info(f"Querying '{layer_name}' with query '{query}' as '{selection}'")
 
+    # set up the layer full path name
     in_layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
+    logging.debug(f"query by attribute in_layer: {in_layer}")
 
+    # call select layer by attribute
     query_result = arcpy.management.SelectLayerByAttribute(in_layer_or_view=in_layer,
                                                            selection_type=selection,
                                                            where_clause=query)
+    # get a count of the number
     count_result = arcpy.management.GetCount(query_result)
+    logging.debug(f"count result from query number: {count_result}")
+    logging.debug("Exiting query_by_attribute")
     return count_result
 
 
@@ -286,12 +339,14 @@ def delete_existing_layer(layer_name: str):
 
     logging.debug("Entered deleted_existing_layer method")
     layer = os.path.join(f"{config_dict.get('arcpy_gdb')}", layer_name)
+    logging.debug(f"delete layer name: {layer}")
+
     # check if the layer exists, delete it if it does
     if arcpy.Exists(layer):
-        logging.info(f"'{layer_name}' already exists - deleting existing layer")
+        logging.warning(f"'{layer_name}' already exists - deleting existing layer")
         arcpy.Delete_management(layer)
     else:
-        logging.error(f"'{layer_name}' does not exist yet")
+        logging.info(f"'{layer_name}' does not exist yet")
     logging.debug("Exiting deleted_existing_layer")
 
 
@@ -305,6 +360,7 @@ def get_number(prompt: str="Enter a number", num_type=float, default=None):
     """
 
     logging.debug("Entering get_number")
+
     # determine the full prompt to show the user
     if default == None:
         full_prompt = f"{prompt}: "
@@ -317,6 +373,7 @@ def get_number(prompt: str="Enter a number", num_type=float, default=None):
 
         # Return default if input is empty
         if user_input == "" and default is not None:
+            logging.debug("Exiting get_number")
             return default
 
         # check the input
@@ -335,6 +392,7 @@ def get_units_for_buffer():
     """
 
     logging.debug("Entering get_units_for_buffer")
+
     # Define a list of acceptable units
     valid_units = config_dict.get('valid_units')
     default_unit = config_dict.get('default_unit')
@@ -350,6 +408,7 @@ def get_units_for_buffer():
 
         # Return default unit if input is empty
         if user_input == "":
+            logging.debug("Exiting unit select")
             return default_unit
 
         # Validate the entered selection
@@ -359,6 +418,7 @@ def get_units_for_buffer():
             if 1 <= unit_choice <= len(valid_units):
                 selected_unit = valid_units[unit_choice - 1]
                 # return the valid unit to buffer
+                logging.debug("Exiting unit select")
                 return selected_unit
             else:
                 print("Invalid selection. Please enter a number from the list.")
@@ -403,6 +463,8 @@ def get_valid_layer_name(default_layer_name: str=None) -> str:
     """
 
     logging.debug("Entering get_valid_layer_name")
+
+    # provide the default layer name if one was provided
     if default_layer_name != None:
         print(f"Press enter to use the default layer name '{default_layer_name}'")
 
@@ -428,6 +490,7 @@ def get_valid_layer_name(default_layer_name: str=None) -> str:
                 # return the layer name entered
                 logging.debug("Exiting get_valid_layer_name")
                 return layer_name
+
         except ValueError as e:
             # Handle the error if the name is invalid
             print(f"Invalid input: {e}")
@@ -440,9 +503,11 @@ def ask_to_continue(prompt: str="Would you like to continue?"):
     """
 
     logging.debug("Entering ask_to_continue")
+
     # Define a list of acceptable answers
     valid_answers = config_dict.get('valid_answers_y_n')
 
+    # inform the user of the selection to use
     print(f"{prompt}")
     for i, answer in enumerate(valid_answers, 1):
         print(f"{i}. {answer}")
@@ -482,7 +547,6 @@ def main():
             buffered_layer = buffer(layer)
             # add the name to the list of buffered layers
             buffer_layer_list.append(buffered_layer)
-            # print a new line for readability in console
 
         # intersect the buffered layers
         intersect_layer = intersect(buffer_layer_list)
@@ -497,7 +561,6 @@ def main():
         print(f"There are {qry_result} addresses found which fall within concerned mosquito areas.")
         logging.info(f"There are {qry_result} addresses found which fall within concerned mosquito areas.")
 
-
         # add the spatial join layer to the arcgis project
         answer = ask_to_continue(prompt=f"Would you like to add '{spatial_layer}' to the project map?")
         if answer == "Yes":
@@ -509,16 +572,16 @@ def main():
         # run the etc process for which addresses to avoid based on Google opt-out form
         etl()
 
-        # erase the areas to avoid, which will create a new layer to use
-        avoid_points_layer = config_dict.get('avoid_points')
         # create a buffered area of where to avoid spraying
+        avoid_points_layer = config_dict.get('avoid_points')
         areas_to_avoid = buffer(avoid_points_layer)
 
+        # erase the areas to avoid from the buffered area, which will create a new layer to use for addresses to spray
         address_to_spray = erase(spatial_layer, areas_to_avoid, default_layer_name="addresses_to_spray")
 
         # inform the user the number of addresses that will not be sprayed
         address_count = spatial_selection(spatial_join_target, address_to_spray)
-        # addresses to notify
+        # num of addresses to notify
         print(f"There are {address_count} addresses that will need treatment and must be notified.")
         logging.info(f"There are {address_count} addresses that will need treatment and must be notified.")
 
