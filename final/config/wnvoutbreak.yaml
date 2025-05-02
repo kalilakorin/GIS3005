@@ -1,0 +1,15 @@
+#remote_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTDjitOlmILea7koCORJkq6QrUcwBJM7K3vy4guXB0mU_nWR6wsPn136bpH6ykoUxyYMW7wTwkzE37l/pub?output=csv"
+remote_url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0mj7-vTgiiyBYg4ywVO6xrS5SPMip-vcxQj33N0HsBr8nK51hFMnLrl-_JRzmIgsQQ04o22LwVMUY/pub?output=csv"
+proj_dir: "D:\\jilli\\Documents\\ACC-RRCC\\Spring_2025\\GIS3005_GIS_Apps\\programs\\data\\lab3\\"
+log_dir: "D:\\jilli\\Documents\\ACC-RRCC\\Spring_2025\\GIS3005_GIS_Apps\\programs\\data\\lab3\\logs\\"
+data_format: ["GSheets"]
+destination: "D:\\jilli\\Documents\\ACC-RRCC\\Spring_2025\\GIS3005_GIS_Apps\\labs\\lab1\\WestNileOutbreak\\WestNileOutbreak.gdb"
+geocoder_prefix_url: "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address="
+geocoder_suffix_url: "&benchmark=2020&format=json"
+arcpy_workspace: "D:\\jilli\\Documents\\ACC-RRCC\\Spring_2025\\GIS3005_GIS_Apps\\labs\\lab1\\WestNileOutbreak"
+arcpy_gdb: "D:\\jilli\\Documents\\ACC-RRCC\\Spring_2025\\GIS3005_GIS_Apps\\labs\\lab1\\WestNileOutbreak\\WestNileOutbreak.gdb"
+arcpy_overwrite: "True"
+valid_units: ["Feet", "Yards", "Miles", "Meters", "Kilometers"]
+default_unit: "Feet"
+valid_answers_y_n: ["Yes", "No"]
+avoid_points: "avoid_points"
