@@ -262,6 +262,46 @@ def spatial_selection(intersect_layer: str, select_layer: str):
     return count
 
 
+def update_layer_display(layer_name: str, color_dict: dict, outline_dict: dict):
+
+    print(f"Starting layer update for {layer_name}")
+    # get the project
+    proj_path = f"{config_dict.get('arcpy_workspace')}"
+    aprx = arcpy.mp.ArcGISProject(rf"{proj_path}\WestNileOutbreak.aprx")
+    map_doc = aprx.listMaps()[0]
+
+    # get the layer in the project
+    target_layer = map_doc.listLayers(layer_name)[0]
+
+    # get the existing symbology
+    sym = target_layer.symbology
+
+    # check if it is a simple renderer
+    if sym.renderer.type == "SimpleRenderer":
+        # set the color
+        sym.renderer.symbol.color = color_dict
+        # set the outline
+        sym.renderer.symbol.outlineColor = outline_dict
+        # apply it to the layer
+        target_layer.symbology = sym
+    else:
+        raise TypeError("This layer is not using a SimpleRenderer. Symbology update may not work as expected")
+
+    # save the changes
+    aprx.save()
+
+
+def update_map_layout(layer_list: list):
+
+    print(f"Layers to add to list {layer_list}")
+    # remove any layers from the current layout
+
+    # add the layers to the list
+    # the first layer added will be the bottom layer
+
+
+
+
 def export_map():
     """
     Exports the layout from the project to a pdf
@@ -588,6 +628,7 @@ def main():
             buffer_layer_list.append(buffered_layer)
 
         # intersect the buffered layers
+        print("Creating an intersect layer of the buffered layer list.")
         intersect_layer = intersect(buffer_layer_list)
 
         # do a spatial join with the addresses that overlap the intersect layer
@@ -609,7 +650,7 @@ def main():
             logging.info(f"Will not add '{spatial_layer}' to the map")
 
         # run the etc process for which addresses to avoid based on Google opt-out form
-        etl()
+        # etl()
 
         # create a buffered area of where to avoid spraying
         avoid_points_layer = config_dict.get('avoid_points')
@@ -624,8 +665,35 @@ def main():
         print(f"There are {address_count} addresses that will need treatment and must be notified.")
         logging.info(f"There are {address_count} addresses that will need treatment and must be notified.")
 
+        # create the area layer where the spraying will occur after the avoid areas are removed
+        # erase buff_avoid_points aka areas_to_avoid from intersect_layer
+        print(f"Creating a layer for the targeted areas to spray")
+        targeted_area = erase(in_layer=intersect_layer, erase_layer=areas_to_avoid, default_layer_name="targeted_area")
+
+        # add the layer to the project, and
+        print("adding layer to map for display")
+        add_layer_to_project(targeted_area)
+
+        # update the layers to display before exporting
+        print("Updating layer")
+        update_layer_display(layer_name=targeted_area, color_dict={'RGB': [255, 0, 0, 50]}, outline_dict={'RGB': [0, 0, 0, 50]})
+
+        # get a list of layers to use within the map - the original layers
+        # wetlands_regulatory, osmp_properties, mosquito_larval_sites, lakes_and_reservoirs
+        # final_analysis (an area) and target_addresses (the actual addresses)
+        layers_for_mapping = layers_to_buffer
+        print(layers_for_mapping)
+        layers_for_mapping.append(targeted_area)
+        print(layers_for_mapping)
+        layers_for_mapping.append(address_to_spray)
+        print(layers_for_mapping)
+        # put the layers into the layout
+        # update_map_layout(layers_for_mapping)
+
         # export the map
         export_map()
+
+        # create a csv file for the targeted addresses
 
         # Notify the end of the program
         logging.info("Script complete. Ending program.")
