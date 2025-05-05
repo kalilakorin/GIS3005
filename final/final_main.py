@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-from turtle import config_dict
 
 import arcpy
 import re
@@ -25,16 +24,20 @@ def setup():
     :return: null
     """
 
+    # set up log location and level
+    logging.basicConfig(level=logging.DEBUG,
+                        filename=f"{config_dict.get('log_dir')}wnv.log",
+                        filemode="w", )
+
+    # inform the user and log
     print("Setting up workspace")
     logging.debug("Setting up workspace")
 
+    # open the yaml config file and fill in the config_dict
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
 
-    logging.basicConfig(level=logging.DEBUG,
-                        filename=f"{config_dict.get('log_dir')}wnv.log",
-                        filemode="w",)
-
+    # inform the user of warning
     print("CAUTION: all layers that are generated in this script may be overwritten or removed.")
     logging.warning("CAUTION: all layers that are generated in this script may be overwritten or removed.")
 
@@ -155,7 +158,7 @@ def spatial_join(target_layer: str, join_layer: str, default_layer_name: str="sp
     out_feature = os.path.join(f"{config_dict.get('arcpy_gdb')}", spatial_join_layer)
     logging.debug(f"spatial join out_feature: {out_feature}")
 
-    # cal the spatial join analysis
+    # call the spatial join analysis
     arcpy.analysis.SpatialJoin(target_features=target_feature,
                                join_features=join_feature,
                                out_feature_class=out_feature,
@@ -259,9 +262,11 @@ def export_map():
         logging.debug(element.name)
         if "Title" in element.name:
             element.text = element.text + "\n" + subtitle_input
+            logging.info("Title updated")
             print("Updated title")
         if "Date" in element.name:
             element.text = element.text + "\n" + today_str
+            logging.info("Date updated")
             print("Updated date")
 
     # set up the name file path and name
@@ -532,6 +537,10 @@ def ask_to_continue(prompt: str="Would you like to continue?"):
 
 
 def main():
+    """
+    Main function which calls all the other functions found within the file
+    :return: 0 if script is successful, 1 if it fails
+    """
     global config_dict
 
     try:

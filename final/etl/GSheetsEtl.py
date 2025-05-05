@@ -5,14 +5,31 @@ import logging
 from etl.SpatialEtl import SpatialEtl
 
 class GSheetsEtl(SpatialEtl):
+    """
+    GSheetsETL performs an extract, transform, and load process using a URL to a Google spreadsheet.
+    The spreadsheet must contain an address and zipcode column.
+
+    :param:
+    config_dict (dictionary): A dictionary containing a remote_url key to the Google spreadsheet
+    and web geocoding service
+    """
 
     # A dictionary of configuration keys and values
     config_dict = None
 
     def __init__(self, config_dict):
+        """
+        Calls super class and initializes parameters
+        :param: config_dict: A dictionary containing a remote_url key to the Google spreadsheet
+        and web geocoding service
+        """
         super().__init__(config_dict)
 
     def process(self):
+        """
+        Calls the three functions (extract, transform, load) in order
+        :return:
+        """
         self.extract()
         self.transform()
         self.load()
@@ -71,14 +88,6 @@ class GSheetsEtl(SpatialEtl):
         out_feature_class = self.config_dict.get('avoid_points')
         x_coords = "X"
         y_coords = "Y"
-
-        # check if the output feature class exists, and if it does, delete it
-        # output_fc = os.path.join(arcpy.env.workspace, out_feature_class)
-        # if arcpy.Exists(output_fc):
-        #     arcpy.Delete_management(output_fc)
-        #     print(f"Deleted existing feature class: {output_fc}")
-        # else:
-        #     print(f"No existing feature class to delete: {output_fc}")
 
         # make the XY event layer
         arcpy.management.XYTableToPoint(in_table=in_table,
