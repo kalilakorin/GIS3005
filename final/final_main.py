@@ -24,11 +24,6 @@ def setup():
     :return: null
     """
 
-    # set up log location and level
-    logging.basicConfig(level=logging.DEBUG,
-                        filename=f"{config_dict.get('log_dir')}wnv.log",
-                        filemode="w", )
-
     # inform the user and log
     print("Setting up workspace")
     logging.debug("Setting up workspace")
@@ -36,6 +31,11 @@ def setup():
     # open the yaml config file and fill in the config_dict
     with open('config/wnvoutbreak.yaml') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    # set up log location and level
+    logging.basicConfig(level=logging.DEBUG,
+                        filename=f"{config_dict.get('log_dir')}wnv.log",
+                        filemode="w" )
 
     # inform the user of warning
     print("CAUTION: all layers that are generated in this script may be overwritten or removed.")
@@ -48,6 +48,33 @@ def setup():
 
     logging.debug("Setup complete")
     return config_dict
+
+def set_spatial_reference():
+    """
+    Sets the spatial reference of the map
+    :return:
+    """
+
+    logging.debug("Setting spatial reference")
+    try:
+        # get the project path
+        proj_path = f"{config_dict.get('arcpy_workspace')}"
+
+        # get the project
+        aprx = arcpy.mp.ArcGISProject(rf"{proj_path}\WestNileOutbreak.aprx")
+
+        # get the map
+        map_doc = aprx.listMaps()[0]
+
+        # set the state plane to NAD 1983 state plane co north (feet)
+        # https://spatialreference.org/ref/esri/102653/
+        co_north = arcpy.SpatialReference(102653)
+        map_doc.spatialReference = co_north
+
+        logging.info(f"Spatial reference changed to {co_north.name}")
+
+    except RuntimeError as e:
+        logging.error(f"Spatial error encountered: {e}")
 
 
 def buffer(layer_name: str):
@@ -546,6 +573,9 @@ def main():
     try:
         config_dict = setup()
         logging.info("Starting West Nile Virus Simulation")
+
+        # set the spatial reference
+        set_spatial_reference()
 
         # layers that exist in gdb which will be buffered
         layers_to_buffer = ["Lakes_and_Reservoirs", "Wetlands", "Mosquito_Larval_Sites", "OSMP_Properties"]
