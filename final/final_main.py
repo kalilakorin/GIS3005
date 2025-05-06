@@ -389,7 +389,6 @@ def export_map(display_layers: list, address_layer: str, target_layer: str):
 
         # update the date
         today_str = datetime.datetime.today().strftime("%B %d, %Y %I:%M %p")
-        print(today_str)
 
         logging.debug("Elements in layout")
         for element in layout.listElements():
@@ -410,7 +409,7 @@ def export_map(display_layers: list, address_layer: str, target_layer: str):
         layout.exportToPDF(out_pdf=map_pdf)
 
         print(f"Map exported: {map_pdf}")
-        logging.info(f"Map exported: {map_pdf}")
+        logging.info(f"Map exported: {map_pdf} at {today_str}")
         logging.debug("Exiting export_map")
 
     except Exception as e:
